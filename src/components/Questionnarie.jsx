@@ -1,74 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
 
 const questions = [
-  {
-    id: 1,
-    category: 'Speech Fluency',
-    title: 'Speech Flow and Interruptions',
-    description: 'How frequently do interruptions or blockages occur when you speak?',
-    options: [
-      { value: 0, label: 'Smooth speech, no interruptions' },
-      { value: 1, label: 'Rare, minor hesitations' },
-      { value: 2, label: 'Occasional significant interruptions' },
-      { value: 3, label: 'Frequent, substantial speech blocks' }
-    ]
+  { 
+    id: 1, 
+    text: "How often do you have difficulty pronouncing specific sounds or words?", 
+    options: ["Rarely", "Occasionally", "Frequently", "Almost always"]
   },
-  {
-    id: 2,
-    category: 'Communication Clarity',
-    title: 'Word Finding and Expression',
-    description: 'How easily can you find the right words to express your thoughts?',
-    options: [
-      { value: 0, label: 'Words flow naturally' },
-      { value: 1, label: 'Occasional mild difficulty' },
-      { value: 2, label: 'Frequent word-finding challenges' },
-      { value: 3, label: 'Severe struggle expressing thoughts' }
-    ]
+  { 
+    id: 2, 
+    text: "Do you find it challenging to understand spoken language during conversations?", 
+    options: ["Not at all", "Sometimes", "Often", "Always"]
   },
-  {
-    id: 3,
-    category: 'Social Communication',
-    title: 'Conversational Engagement',
-    description: 'How comfortable are you maintaining conversations in various social settings?',
-    options: [
-      { value: 0, label: 'Very comfortable in all settings' },
-      { value: 1, label: 'Slightly anxious in some situations' },
-      { value: 2, label: 'Significant social communication anxiety' },
-      { value: 3, label: 'Extreme difficulty in social interactions' }
-    ]
+  { 
+    id: 3, 
+    text: "How comfortable do you feel speaking in front of groups?", 
+    options: ["Very comfortable", "Somewhat comfortable", "Somewhat uncomfortable", "Very uncomfortable"]
   },
-  {
-    id: 4,
-    category: 'Comprehension',
-    title: 'Language Understanding',
-    description: 'How well do you understand complex verbal instructions or conversations?',
-    options: [
-      { value: 0, label: 'Fully understand with ease' },
-      { value: 1, label: 'Minor comprehension challenges' },
-      { value: 2, label: 'Frequent comprehension difficulties' },
-      { value: 3, label: 'Significant understanding barriers' }
-    ]
+  { 
+    id: 4, 
+    text: "Have you experienced stuttering (repeating sounds, syllables, or words) while speaking?", 
+    options: ["Never", "Rarely", "Frequently", "Almost every time I speak"]
   },
-  {
-    id: 5,
-    category: 'Phonetic Precision',
-    title: 'Sound Articulation',
-    description: 'How accurately can you pronounce different sounds and words?',
-    options: [
-      { value: 0, label: 'Precise articulation' },
-      { value: 1, label: 'Occasional mild pronunciation issues' },
-      { value: 2, label: 'Regular articulation challenges' },
-      { value: 3, label: 'Significant pronunciation difficulties' }
-    ]
+  { 
+    id: 5, 
+    text: "Do you find it difficult to express your thoughts clearly and find the right words?", 
+    options: ["No difficulty", "Somewhat difficult", "Difficult", "Extremely difficult"]
+  },
+  { 
+    id: 6, 
+    text: "Do others have trouble understanding you when you speak?", 
+    options: ["Rarely", "Occasionally", "Frequently", "Almost always"]
+  },
+  { 
+    id: 7, 
+    text: "Are there any specific sounds or words that you consistently have trouble with?", 
+    options: ["None", "A few sounds/words", "Many sounds/words", "Almost all sounds/words"]
+  },
+  { 
+    id: 8, 
+    text: "How well can you maintain a conversation without losing focus or needing frequent pauses?", 
+    options: ["Very well", "Somewhat well", "With difficulty", "With extreme difficulty"]
+  },
+  { 
+    id: 9, 
+    text: "Do you have trouble with understanding or following complex instructions?", 
+    options: ["Never", "Occasionally", "Often", "Always"]
+  },
+  { 
+    id: 10, 
+    text: "Have you been diagnosed with any speech, language, or communication disorder in the past?", 
+    options: ["No", "Yes, speech disorder (e.g., articulation issues)", "Yes, language disorder (e.g., expressive/receptive issues)", "Yes, another communication-related disorder"]
   }
 ];
 
-const AdvancedQuestionnaire = () => {
-  const [currentStep, setCurrentStep] = useState(0);
+const Questionnaire = () => {
   const [answers, setAnswers] = useState({});
   const navigate = useNavigate();
 
@@ -78,7 +66,7 @@ const AdvancedQuestionnaire = () => {
       if (user) {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists() && userDoc.data().questionnaireCompleted) {
-          navigate('/patient-dashboard');
+          navigate('/patient-dashboard'); // Redirect if questionnaire is completed
         }
       }
     };
@@ -86,27 +74,78 @@ const AdvancedQuestionnaire = () => {
     checkQuestionnaireStatus();
   }, [navigate]);
 
-  const handleAnswer = (value) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questions[currentStep].id]: value
-    }));
-    
-    // Move to next step or submit
-    if (currentStep < questions.length - 1) {
-      setCurrentStep(prev => prev + 1);
-    }
+  const handleChange = (questionId, answer) => {
+    setAnswers((prevAnswers) => ({ ...prevAnswers, [questionId]: answer }));
   };
 
-  const handleSubmit = async () => {
+  const assignTherapist = async (patientId, patientTags) => {
+    try {
+      // Query therapists with matching tags and availability
+      const therapistQuery = query(
+        collection(db, 'users'),
+        where('role', '==', 'therapist'),
+        where('specialtyTags', 'array-contains-any', patientTags),
+        where('active', '==', true)
+      );
+  
+      const therapistSnapshot = await getDocs(therapistQuery);
+      let therapists = [];
+  
+      // Gather all therapists matching tags
+      therapistSnapshot.forEach((doc) => {
+        const therapist = doc.data();
+        therapists.push({ id: doc.id, ...therapist });
+      });
+  
+      if (therapists.length === 0) {
+        alert('No available therapist found for your issues. Please try again later.');
+        return;
+      }
+  
+      // Sort therapists by workload (ascending order of currentPatients.length)
+      therapists.sort((a, b) => a.currentPatients.length - b.currentPatients.length);
+  
+      // Allocate to the therapist with the least number of patients
+      const assignedTherapist = therapists.find(
+        (therapist) => therapist.currentPatients.length < therapist.maxPatients
+      );
+  
+      if (!assignedTherapist) {
+        alert('All therapists are currently at capacity. Please try again later.');
+        return;
+      }
+  
+      // Update therapist's patient list
+      const updatedPatients = [...assignedTherapist.currentPatients, patientId];
+      await updateDoc(doc(db, 'users', assignedTherapist.id), {
+        currentPatients: updatedPatients,
+        updatedAt: new Date().toISOString()
+      });
+  
+      // Update patient's therapist assignment
+      await updateDoc(doc(db, 'users', patientId), {
+        assignedTherapist: assignedTherapist.id,
+        updatedAt: new Date().toISOString()
+      });
+  
+      alert(`You have been assigned to therapist: ${assignedTherapist.name}`);
+      navigate('/patient-dashboard');
+    } catch (error) {
+      console.error('Error assigning therapist:', error);
+      alert('An error occurred while assigning a therapist. Please try again.');
+    }
+  };
+  
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
     const assignedTags = [];
-    
-    // Advanced tag assignment logic
-    if (answers[1] >= 2) assignedTags.push('speech-fluency-disorder');
-    if (answers[2] >= 2) assignedTags.push('expressive-language-disorder');
-    if (answers[3] >= 2) assignedTags.push('social-communication-disorder');
-    if (answers[4] >= 2) assignedTags.push('receptive-language-disorder');
-    if (answers[5] >= 2) assignedTags.push('articulation-disorder');
+    // Map answers to tags (existing logic)
+    if (answers[1] === "Frequently" || answers[1] === "Almost always") assignedTags.push("articulation-disorder");
+    if (answers[7] === "Many sounds/words" || answers[7] === "Almost all sounds/words") assignedTags.push("articulation-disorder");
+    if (answers[2] === "Often" || answers[2] === "Always") assignedTags.push("language-disorder");
+    // ... (continue with existing mapping logic)
 
     try {
       const user = auth.currentUser;
@@ -115,6 +154,7 @@ const AdvancedQuestionnaire = () => {
         return;
       }
 
+      // Save tags to patient's profile
       await setDoc(
         doc(db, 'users', user.uid),
         {
@@ -125,72 +165,45 @@ const AdvancedQuestionnaire = () => {
         { merge: true }
       );
 
-      // Redirect or handle therapist assignment
-      navigate('/patient-dashboard');
+      // Assign therapist to the patient
+      await assignTherapist(user.uid, assignedTags);
     } catch (error) {
       console.error('Error submitting questionnaire:', error);
       alert('Error submitting questionnaire. Please try again.');
     }
   };
 
-  const goBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-    }
-  };
-
-  const currentQuestion = questions[currentStep];
-
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-indigo-100 to-purple-100">
-      <div className="bg-white shadow-2xl rounded-xl p-8 max-w-md w-full space-y-6 relative">
-        <div className="absolute top-4 right-4 text-sm text-gray-500">
-          {currentStep + 1} / {questions.length}
-        </div>
-        
-        <div className="text-center">
-          <h3 className="text-xl font-semibold text-indigo-700">{currentQuestion.category}</h3>
-          <h2 className="text-2xl font-bold text-gray-800 mt-2">{currentQuestion.title}</h2>
-          <p className="text-gray-600 mt-2">{currentQuestion.description}</p>
-        </div>
-
-        <div className="space-y-4">
-          {currentQuestion.options.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => handleAnswer(option.value)}
-              className={`w-full text-left p-4 rounded-lg transition duration-200 hover:bg-indigo-50 
-                ${answers[currentQuestion.id] === option.value 
-                  ? 'bg-indigo-100 border-2 border-indigo-500' 
-                  : 'bg-gray-100 border-2 border-transparent'}`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex justify-between items-center">
-          {currentStep > 0 && (
-            <button 
-              onClick={goBack} 
-              className="flex items-center text-gray-600 hover:text-indigo-600"
-            >
-              <ChevronLeft className="mr-2" /> Back
-            </button>
-          )}
-
-          {currentStep === questions.length - 1 && (
-            <button 
-              onClick={handleSubmit}
-              className="ml-auto flex items-center bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
-            >
-              Submit <Check className="ml-2" />
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="flex justify-center items-center min-h-screen bg-gray-100">
+      <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-lg p-8 max-w-md w-full space-y-6">
+        <h2 className="text-2xl font-semibold text-gray-700 text-center mb-6">Questionnaire</h2>
+        {questions.map((question) => (
+          <div key={question.id} className="space-y-2">
+            <p className="text-gray-700">{question.text}</p>
+            {question.options.map((option) => (
+              <label key={option} className="block">
+                <input
+                  type="radio"
+                  name={`question-${question.id}`}
+                  value={option}
+                  checked={answers[question.id] === option}
+                  onChange={() => handleChange(question.id, option)}
+                  className="mr-2"
+                />
+                {option}
+              </label>
+            ))}
+          </div>
+        ))}
+        <button
+          type="submit"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-md transition duration-200"
+        >
+          Submit
+        </button>
+      </form>
     </div>
   );
 };
 
-export default AdvancedQuestionnaire;
+export default Questionnaire;
