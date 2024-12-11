@@ -3,6 +3,17 @@ import { auth, db } from "../firebase";
 import { doc, getDoc, collection, getDocs, updateDoc, setDoc } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
+import { 
+  Users, 
+  UserPlus, 
+  Calendar, 
+  ClipboardList, 
+  RefreshCw, 
+  AlertTriangle, 
+  Check,
+  Plus,
+  X 
+} from "lucide-react";
 
 export const TherapySessionsCalendar = () => {
   const [patients, setPatients] = useState([]);
@@ -117,96 +128,112 @@ export const TherapySessionsCalendar = () => {
   };
 
   return (
-    <div className="therapy-sessions-calendar p-4">
-      <h1 className="text-2xl font-bold mb-4">Therapist's Patients</h1>
-      {loading && <p>Loading patients...</p>}
-      {error && <p className="text-red-500">{error}</p>}
-      {!loading && patients.length === 0 && <p>No patients allocated yet.</p>}
-      <ul className="space-y-4">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="flex items-center mb-8">
+        <Users className="mr-4 text-blue-600" size={32} />
+        <h1 className="text-3xl font-bold text-gray-800">Therapist's Patient Management</h1>
+      </div>
+
+      {loading && (
+        <div className="flex justify-center items-center h-64">
+          <RefreshCw className="animate-spin text-blue-500" size={32} />
+          <span className="ml-3 text-gray-600">Loading patients...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center mb-4">
+          <AlertTriangle className="text-red-500 mr-3" size={24} />
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {!loading && patients.length === 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+          <UserPlus className="mx-auto mb-4 text-gray-400" size={48} />
+          <p className="text-gray-600">No patients allocated yet.</p>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-1 gap-6">
         {patients.map((patient) => (
-          <li
-            key={patient.id}
-            className="flex items-center justify-between p-4 bg-white rounded-lg shadow-md"
+          <div 
+            key={patient.id} 
+            className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 p-6 border border-gray-100 flex flex-col md:flex-row items-center"
           >
-            <div>
-              <p className="text-lg font-semibold">{patient.name}</p>
+            <div className="flex-grow mb-4 md:mb-0 md:mr-6 text-center md:text-left">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                <Calendar className="mr-2 text-blue-500" size={20} />
+                {patient.name}
+              </h2>
             </div>
-            <div className="w-2/3 mx-4">
-              <div className="relative h-4 bg-gray-200 rounded-full">
+
+            <div className="w-full md:w-1/2 mb-4 md:mb-0 md:mx-4">
+              <div className="relative h-4 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className="absolute top-0 left-0 h-4 bg-blue-500 rounded-full"
+                  className="absolute top-0 left-0 h-4 bg-blue-500 rounded-full transition-all duration-500 ease-in-out"
                   style={{ width: `${(patient.progress / 10) * 100}%` }}
                 ></div>
               </div>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-600 mt-2 text-center md:text-left">
                 Progress: {patient.progress}/10
               </p>
             </div>
+
             <button
-              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+              className="flex items-center bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-300"
               onClick={() => handleCreateSession(patient.id)}
             >
+              <Plus className="mr-2" size={20} />
               Create Session
             </button>
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
+
       {showForm && (
-        <div className="fixed inset-0 bg-gray-700 bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 className="text-xl font-bold mb-4">Session Details</h2>
-            <form>
-              <input
-                type="text"
-                placeholder="Session Objective"
-                value={formData.sessionObjective}
-                onChange={(e) =>
-                  setFormData({ ...formData, sessionObjective: e.target.value })
-                }
-                className="w-full mb-2 p-2 border rounded"
-              />
-              <input
-                type="text"
-                placeholder="Warm-up Activity"
-                value={formData.warmUpActivity}
-                onChange={(e) =>
-                  setFormData({ ...formData, warmUpActivity: e.target.value })
-                }
-                className="w-full mb-2 p-2 border rounded"
-              />
-              <input
-                type="text"
-                placeholder="Core Therapy Activity"
-                value={formData.coreTherapyActivity}
-                onChange={(e) =>
-                  setFormData({ ...formData, coreTherapyActivity: e.target.value })
-                }
-                className="w-full mb-2 p-2 border rounded"
-              />
-              <input
-                type="text"
-                placeholder="Review and Feedback"
-                value={formData.reviewFeedback}
-                onChange={(e) =>
-                  setFormData({ ...formData, reviewFeedback: e.target.value })
-                }
-                className="w-full mb-2 p-2 border rounded"
-              />
-              <input
-                type="text"
-                placeholder="Home Assignment"
-                value={formData.homeAssignment}
-                onChange={(e) =>
-                  setFormData({ ...formData, homeAssignment: e.target.value })
-                }
-                className="w-full mb-4 p-2 border rounded"
-              />
+        <div className="fixed inset-0 z-50 bg-gray-700 bg-opacity-50 flex justify-center items-center p-4">
+          <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                <ClipboardList className="mr-3 text-blue-500" size={24} />
+                Session Details
+              </h2>
+              <button 
+                onClick={() => setShowForm(false)}
+                className="text-gray-500 hover:text-red-500"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form className="space-y-4">
+              {[
+                { key: 'sessionObjective', placeholder: 'Session Objective' },
+                { key: 'warmUpActivity', placeholder: 'Warm-up Activity' },
+                { key: 'coreTherapyActivity', placeholder: 'Core Therapy Activity' },
+                { key: 'reviewFeedback', placeholder: 'Review and Feedback' },
+                { key: 'homeAssignment', placeholder: 'Home Assignment' }
+              ].map((field) => (
+                <input
+                  key={field.key}
+                  type="text"
+                  placeholder={field.placeholder}
+                  value={formData[field.key]}
+                  onChange={(e) =>
+                    setFormData({ ...formData, [field.key]: e.target.value })
+                  }
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
+                />
+              ))}
+
               <button
                 type="button"
                 onClick={handleSubmitSession}
-                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 w-full"
+                className="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-colors duration-300 flex items-center justify-center"
               >
-                Submit
+                <Check className="mr-2" size={20} />
+                Submit Session
               </button>
             </form>
           </div>

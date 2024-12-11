@@ -5,6 +5,7 @@ import { Home, Calendar, Settings, User } from 'lucide-react';
 import AllocationStatus from '../components/AllocationStatus';
 import PatientTherapyPlan from '../components/PatientTherapyPlan';
 // import { PatientChat } from '../components/PatientChat';
+import UpcomingSessions from '../components/UpcomingSessions';
 
 // Sidebar Component
 const Sidebar = ({ activeTab, setActiveTab }) => {
@@ -213,6 +214,8 @@ const PatientDashboard = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-800 mb-8">Upcoming Sessions</h1>
             {/* Add upcoming sessions content */}
+            <UpcomingSessions/>
+
           </div>
         )}
 

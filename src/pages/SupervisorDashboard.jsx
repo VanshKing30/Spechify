@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import TherapistListing from '../components/TherapistListing';
 
 const SupervisorDashboard = () => {
   const [therapyPlans, setTherapyPlans] = useState([]);
+  const [progressReports, setProgressReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState(null);
   const [updatedContent, setUpdatedContent] = useState('');
+  const [view, setView] = useState('approvals'); // Manage different views
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -16,66 +19,66 @@ const SupervisorDashboard = () => {
         const plansList = [];
         plansSnapshot.forEach((doc) => {
           const data = doc.data();
-          console.log('Fetched Plan:', data);
           if (data.supervisorId === auth.currentUser?.uid) {
             plansList.push({ id: doc.id, ...data });
           }
         });
         setTherapyPlans(plansList);
         setLoading(false);
-        console.log('Filtered Plans:', plansList);
       } catch (error) {
         console.error('Error fetching therapy plans:', error);
         setLoading(false);
       }
     };
-  
-    fetchPlans();
-  }, []);
-  
 
-  const handleApproval = async (planId, status) => {
+    const fetchReports = async () => {
+      try {
+        const reportsCollectionRef = collection(db, 'progress_report_approvals');
+        const reportsSnapshot = await getDocs(reportsCollectionRef);
+        const reportsList = [];
+        reportsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.supervisorId === auth.currentUser?.uid) {
+            reportsList.push({ id: doc.id, ...data });
+          }
+        });
+        setProgressReports(reportsList);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching progress reports:', error);
+        setLoading(false);
+      }
+    };
+
+    if (view === 'approvals') {
+      fetchPlans();
+    } else if (view === 'progressReports') {
+      fetchReports();
+    }
+  }, [view]);
+
+  const handleApproval = async (itemId, status, collectionName) => {
     try {
-      const planRef = doc(db, 'therapy_plan_approvals', planId);
-      await updateDoc(planRef, { status });
+      const itemRef = doc(db, collectionName, itemId);
+      await updateDoc(itemRef, { status });
 
-      setTherapyPlans((prev) =>
-        prev.map((plan) =>
-          plan.id === planId ? { ...plan, status } : plan
-        )
-      );
+      if (collectionName === 'therapy_plan_approvals') {
+        setTherapyPlans((prev) =>
+          prev.map((plan) => (plan.id === itemId ? { ...plan, status } : plan))
+        );
+      } else if (collectionName === 'progress_report_approvals') {
+        setProgressReports((prev) =>
+          prev.map((report) => (report.id === itemId ? { ...report, status } : report))
+        );
+      }
 
-      alert(`Therapy plan ${status === 'approved' ? 'approved' : 'rejected'} successfully!`);
+      alert(`${collectionName.replace('_', ' ')} ${status === 'approved' ? 'approved' : 'rejected'} successfully!`);
     } catch (error) {
-      console.error('Error updating therapy plan status:', error);
+      console.error(`Error updating ${collectionName} status:`, error);
     }
   };
 
-  const openEditModal = (plan) => {
-    setEditingPlan(plan);
-    console.log("myplan" , plan);
-    setUpdatedContent(plan.content || '');
-  };
-
-  const handleEditSave = async () => {
-    try {
-      const planRef = doc(db, 'therapy_plan_approvals', editingPlan.id);
-      await updateDoc(planRef, { content: updatedContent });
-
-      setTherapyPlans((prev) =>
-        prev.map((plan) =>
-          plan.id === editingPlan.id ? { ...plan, content: updatedContent } : plan
-        )
-      );
-
-      setEditingPlan(null);
-      alert('Therapy plan updated successfully!');
-    } catch (error) {
-      console.error('Error updating therapy plan content:', error);
-    }
-  };
-
-  if (loading) {
+  if (loading && (view === 'approvals' || view === 'progressReports')) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -87,72 +90,118 @@ const SupervisorDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center py-6">
-      <h1 className="text-2xl font-semibold text-gray-800 mb-6">Supervisor Dashboard</h1>
-      <div className="w-3/4 bg-white rounded-lg shadow-md p-6">
-        {therapyPlans.length > 0 ? (
-          therapyPlans.map((plan) => (
-            <div key={plan.id} className="border-b border-gray-200 py-4">
-              <h2 className="font-semibold text-lg">{`Therapist ID: ${plan.therapistId}`}</h2>
-              <p className="text-gray-600">{`Patient ID: ${plan.patientId}`}</p>
-              <p className="text-gray-600">{`Content: ${plan.content || 'No content available'}`}</p>
-              <p className="text-gray-600">{`Status: ${plan.status}`}</p>
-              <p className="text-gray-600">{`Status: ${plan.goals}`}</p>
-              <p className="text-gray-600">{`Techniuqes : ${plan.techniques}`}</p>
-              <div className="mt-4">
-                <button
-                  className="bg-green-500 text-white px-4 py-2 rounded mr-2"
-                  onClick={() => handleApproval(plan.id, 'approved')}
-                >
-                  Approve
-                </button>
-                <button
-                  className="bg-red-500 text-white px-4 py-2 rounded mr-2"
-                  onClick={() => handleApproval(plan.id, 'rejected')}
-                >
-                  Reject
-                </button>
-                <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded"
-                  onClick={() => openEditModal(plan)}
-                >
-                  Edit
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-gray-600">No therapy plans pending approval.</p>
-        )}
+    <div className="flex min-h-screen bg-gray-100">
+      {/* Sidebar */}
+      <div className="w-64 bg-white shadow-lg p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-6">Supervisor Dashboard</h2>
+        <nav>
+          <ul>
+            <li className="mb-4">
+              <button
+                className={`text-gray-700 hover:text-indigo-600 font-medium ${view === 'approvals' && 'text-indigo-600'}`}
+                onClick={() => setView('approvals')}
+              >
+                Pending Approvals
+              </button>
+            </li>
+            <li className="mb-4">
+              <button
+                className={`text-gray-700 hover:text-indigo-600 font-medium ${view === 'progressReports' && 'text-indigo-600'}`}
+                onClick={() => setView('progressReports')}
+              >
+                Progress Report Approval
+              </button>
+            </li>
+            <li className="mb-4">
+              <button
+                className={`text-gray-700 hover:text-indigo-600 font-medium ${view === 'therapistListing' && 'text-indigo-600'}`}
+                onClick={() => setView('therapistListing')}
+              >
+                Therapist Listing
+              </button>
+            </li>
+            <li className="mb-4">
+              <a href="#" className="text-gray-700 hover:text-indigo-600 font-medium">
+                Settings
+              </a>
+            </li>
+          </ul>
+        </nav>
       </div>
 
-      {editingPlan && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-1/2">
-            <h2 className="text-xl font-semibold mb-4">Edit Therapy Plan</h2>
-            <textarea
-              className="w-full p-2 border rounded mb-4"
-              rows="6"
-              value={updatedContent}
-              onChange={(e) => setUpdatedContent(e.target.value)}
-            />
-            <div className="flex justify-end">
-              <button
-                className="bg-gray-500 text-white px-4 py-2 rounded mr-2"
-                onClick={() => setEditingPlan(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="bg-indigo-600 text-white px-4 py-2 rounded"
-                onClick={handleEditSave}
-              >
-                Save Changes
-              </button>
+      {/* Main Content */}
+      <div className="flex-1 p-6">
+        {view === 'approvals' && (
+          <>
+            <h1 className="text-2xl font-semibold text-gray-800 mb-6">Pending Approvals</h1>
+            <div className="bg-white rounded-lg shadow-md p-6">
+              {therapyPlans.length > 0 ? (
+                therapyPlans.map((plan) => (
+                  <div key={plan.id} className="border-b border-gray-200 py-4">
+                    <h2 className="font-semibold text-lg">{`Therapist ID: ${plan.therapistId}`}</h2>
+                    <p className="text-gray-600">{`Patient ID: ${plan.patientId}`}</p>
+                    <p className="text-gray-600">{`Content: ${plan.content || 'No content available'}`}</p>
+                    <p className="text-gray-600">{`Status: ${plan.status}`}</p>
+                    <p className="text-gray-600">{`Goals: ${plan.goals}`}</p>
+                    <p className="text-gray-600">{`Techniques: ${plan.techniques}`}</p>
+                    <div className="mt-4">
+                      <button
+                        className="bg-green-500 text-white px-4 py-2 rounded mr-2"
+                        onClick={() => handleApproval(plan.id, 'approved', 'therapy_plan_approvals')}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="bg-red-500 text-white px-4 py-2 rounded mr-2"
+                        onClick={() => handleApproval(plan.id, 'rejected', 'therapy_plan_approvals')}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-600">No therapy plans pending approval.</p>
+              )}
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+        {view === 'progressReports' && (
+          <>
+            <h1 className="text-2xl font-semibold text-gray-800 mb-6">Progress Report Approvals</h1>
+            <div className="bg-white rounded-lg shadow-md p-6">
+              {progressReports.length > 0 ? (
+                progressReports.map((report) => (
+                  <div key={report.id} className="border-b border-gray-200 py-4">
+                    <h2 className="font-semibold text-lg">{`Report ID: ${report.id}`}</h2>
+                    <p className="text-gray-600">{`Therapist ID: ${report.therapistId}`}</p>
+                    <p className="text-gray-600">{`Patient ID: ${report.patientId}`}</p>
+                    <p className="text-gray-600">{`Content: ${report.content || 'No content available'}`}</p>
+                    <p className="text-gray-600">{`Status: ${report.status}`}</p>
+                    <div className="mt-4">
+                      <button
+                        className="bg-green-500 text-white px-4 py-2 rounded mr-2"
+                        onClick={() => handleApproval(report.id, 'approved', 'progress_report_approvals')}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="bg-red-500 text-white px-4 py-2 rounded mr-2"
+                        onClick={() => handleApproval(report.id, 'rejected', 'progress_report_approvals')}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-600">No progress reports pending approval.</p>
+              )}
+            </div>
+          </>
+        )}
+        {view === 'therapistListing' && <TherapistListing />}
+      </div>
     </div>
   );
 };
